@@ -1,0 +1,10 @@
+---
+- name: install required softwares
+  hosts: dev-instance
+  become: yes
+  roles:
+    - install-git
+    - install-telnet
+    - install-ntp
+    - install-httpd
+    - uplod-code

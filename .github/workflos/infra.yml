@@ -1,0 +1,66 @@
+name: Infra Deployment
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  terraform-ansible:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{AWS_DEFAULT_REGION}}
+
+    steps:
+      # Step 1: Checkout repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      # Step 3: Init + Apply S3 + DynamoDB
+      - name: Init S3+DynamoDB
+        run: terraform -chdir="./s3 bucket db" init
+
+      - name: Apply S3+DynamoDB
+        run: terraform -chdir="./s3 bucket db" apply -auto-approve
+
+      # Step 4: Init + Apply Networking
+      - name: Init Networking
+        run: terraform -chdir="./terraform/root/networking" init
+
+      - name: Apply Networking
+        run: terraform -chdir="./terraform/root/networking" apply -auto-approve
+
+        # Step 5: Init + Apply sg
+      - name: Init sg
+        run: terraform -chdir="./terraform/root/security group" init
+
+      - name: Apply sg
+        run: terraform -chdir="./terraform/root/security group" apply -auto-approve
+
+      # Step 5: Init + Apply EC2
+      - name: Init EC2
+        run: terraform -chdir="./terraform/root/compute ec2" init
+
+      - name: Apply EC2
+        run: terraform -chdir="./terraform/root/compute ec2" apply -auto-approve
+
+      # Step 6: Install Ansible
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible python3-boto3
+
+      # Step 7: Install AWS Ansible collection (zaroori hai aws_ec2 plugin ke liye)
+      - name: Install amazon.aws collection
+        run: ansible-galaxy collection install amazon.aws
+
+      # Step 8: Run Ansible Playbook
+      - name: Configure EC2 with Ansible
+        run: |
+          ansible-playbook -i ansible/aws_ec2.yml ansible/install-required-software.yml
